@@ -829,6 +829,35 @@ def fitness(x):
     return (x[:, :4] * w).sum(1)
 
 
+def output_to_target(output, width, height):
+    """
+    Convert a YOLO model output to target format
+
+    [batch_id, class_id, x, y, w, h, conf]
+
+    """
+
+    if isinstance(output, torch.Tensor):
+        output = output.cpu().numpy()
+
+    targets = []
+    for i, o in enumerate(output):
+
+        if o is not None:
+            for pred in o:
+                box = pred[:4]
+                w = (box[2] - box[0]) / width
+                h = (box[3] - box[1]) / height
+                x = box[0] / width + w / 2
+                y = box[1] / height + h / 2
+                conf = pred[4]
+                cls = int(pred[5])
+
+                targets.append([i, cls, x, y, w, h, conf])
+
+    return np.array(targets)
+
+
 # Plotting functions ---------------------------------------------------------------------------------------------------
 def plot_one_box(x, img, color=None, label=None, line_thickness=None):
     # Plots one bounding box on image img
@@ -864,30 +893,84 @@ def plot_wh_methods():  # from utils.utils import *; plot_wh_methods()
     fig.savefig('comparison.png', dpi=200)
 
 
-def plot_images(imgs, targets, paths=None, fname='images.png'):
-    # Plots training images overlaid with targets
-    imgs = imgs.cpu().numpy()
-    targets = targets.cpu().numpy()
-    # targets = targets[targets[:, 1] == 21]  # plot only one class
+def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max_size=640, max_subplots=16):
+    tl = 3  # line thickness
+    tf = max(tl - 1, 1)  # font thickness
 
-    fig = plt.figure(figsize=(10, 10))
-    bs, _, h, w = imgs.shape  # batch size, _, height, width
-    bs = min(bs, 16)  # limit plot to 16 images
-    ns = np.ceil(bs ** 0.5)  # number of subplots
+    if isinstance(images, torch.Tensor):
+        images = images.cpu().numpy()
 
-    for i in range(bs):
-        boxes = xywh2xyxy(targets[targets[:, 0] == i, 2:6]).T
-        boxes[[0, 2]] *= w
-        boxes[[1, 3]] *= h
-        plt.subplot(ns, ns, i + 1).imshow(imgs[i].transpose(1, 2, 0))
-        plt.plot(boxes[[0, 2, 2, 0, 0]], boxes[[1, 1, 3, 3, 1]], '.-')
-        plt.axis('off')
+    if isinstance(targets, torch.Tensor):
+        targets = targets.cpu().numpy()
+
+    # un-normalise
+    if np.max(images[0]) <= 1:
+        images *= 255
+
+    bs, _, h, w = images.shape  # batch size, _, height, width
+    bs = min(bs, max_subplots)  # limit plot images
+    ns = np.ceil(bs ** 0.5)  # number of subplots (square)
+
+    # Check if we should resize
+    scale_factor = max_size / max(h, w)
+    if scale_factor < 1:
+        h = math.ceil(scale_factor * h)
+        w = math.ceil(scale_factor * w)
+
+    # Empty array for output
+    mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)
+
+    # Fix class - colour map
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    # https://stackoverflow.com/questions/51350872/python-from-color-name-to-rgb
+    hex2rgb = lambda h: tuple(int(h[1 + i:1 + i + 2], 16) for i in (0, 2, 4))
+    color_lut = [hex2rgb(h) for h in prop_cycle.by_key()['color']]
+
+    for i, img in enumerate(images):
+        if i == max_subplots:  # if last batch has fewer images than we expect
+            break
+
+        block_x = int(w * (i // ns))
+        block_y = int(h * (i % ns))
+
+        img = img.transpose(1, 2, 0)
+        if scale_factor < 1:
+            img = cv2.resize(img, (w, h))
+
+        mosaic[block_y:block_y + h, block_x:block_x + w, :] = img
+        if len(targets) > 0:
+            image_targets = targets[targets[:, 0] == i]
+            boxes = xywh2xyxy(image_targets[:, 2:6]).T
+            classes = image_targets[:, 1].astype('int')
+            gt = image_targets.shape[1] == 6  # ground truth if no conf column
+            conf = None if gt else image_targets[:, 6]  # check for confidence presence (gt vs pred)
+
+            boxes[[0, 2]] *= w
+            boxes[[0, 2]] += block_x
+            boxes[[1, 3]] *= h
+            boxes[[1, 3]] += block_y
+            for j, box in enumerate(boxes.T):
+                cls = int(classes[j])
+                color = color_lut[cls % len(color_lut)]
+                cls = names[cls] if names else cls
+                if gt or conf[j] > 0.3:  # 0.3 conf thresh
+                    label = '%s' % cls if gt else '%s %.1f' % (cls, conf[j])
+                    plot_one_box(box, mosaic, label=label, color=color, line_thickness=tl)
+
+        # Draw image filename labels
         if paths is not None:
-            s = Path(paths[i]).name
-            plt.title(s[:min(len(s), 40)], fontdict={'size': 8})  # limit to 40 characters
-    fig.tight_layout()
-    fig.savefig(fname, dpi=200)
-    plt.close()
+            label = os.path.basename(paths[i])[:40]  # trim to 40 char
+            t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+            cv2.putText(mosaic, label, (block_x + 5, block_y + t_size[1] + 5), 0, tl / 3, [220, 220, 220], thickness=tf,
+                        lineType=cv2.LINE_AA)
+
+        # Image border
+        cv2.rectangle(mosaic, (block_x, block_y), (block_x + w, block_y + h), (255, 255, 255), thickness=3)
+
+    if fname is not None:
+        cv2.imwrite(fname, cv2.cvtColor(mosaic, cv2.COLOR_BGR2RGB))
+
+    return mosaic
 
 
 def plot_test_txt():  # from utils.utils import *; plot_test()

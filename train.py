@@ -22,7 +22,7 @@ last = wdir + 'last.pt'
 best = wdir + 'best.pt'
 results_file = 'results.txt'
 
-# Hyperparameters https://github.com/ultralytics/yolov3/issues/310
+# Hyperparameters
 hyp = {'giou': 3.54,  # giou loss gain
        'cls': 37.4,  # cls loss gain
        'cls_pw': 1.0,  # cls BCELoss positive_weight
@@ -108,6 +108,7 @@ def train():
         optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)
+    print('Optimizer groups: %g .bias, %g Conv2d.weight, %g other' % (len(pg2), len(pg1), len(pg0)))
     del pg0, pg1, pg2
 
     start_epoch = 0
@@ -291,9 +292,9 @@ def train():
             # Plot
             if ni < 1:
                 f = 'train_batch%g.jpg' % i  # filename
-                plot_images(imgs=imgs, targets=targets, paths=paths, fname=f)
+                res = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
                 if tb_writer:
-                    tb_writer.add_image(f, cv2.imread(f)[:, :, ::-1], dataformats='HWC')
+                    tb_writer.add_image(f, res, dataformats='HWC', global_step=epoch)
                     # tb_writer.add_graph(model, imgs)  # add model to tensorboard
 
             # end batch ------------------------------------------------------------------------------------------------
@@ -315,13 +316,13 @@ def train():
                                       single_cls=opt.single_cls,
                                       dataloader=testloader)
 
-        # Write epoch results
+        # Write
         with open(results_file, 'a') as f:
             f.write(s + '%10.3g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
         if len(opt.name) and opt.bucket:
             os.system('gsutil cp results.txt gs://%s/results/results%s.txt' % (opt.bucket, opt.name))
 
-        # Write Tensorboard results
+        # Tensorboard
         if tb_writer:
             tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
                     'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/F1',
@@ -334,34 +335,25 @@ def train():
         if fi > best_fitness:
             best_fitness = fi
 
-        # Save training results
+        # Save model
         save = (not opt.nosave) or (final_epoch and not opt.evolve)
         if save:
-            with open(results_file, 'r') as f:
-                # Create checkpoint
+            with open(results_file, 'r') as f:  # create checkpoint
                 chkpt = {'epoch': epoch,
                          'best_fitness': best_fitness,
                          'training_results': f.read(),
                          'model': ema.ema.module.state_dict() if hasattr(model, 'module') else ema.ema.state_dict(),
                          'optimizer': None if final_epoch else optimizer.state_dict()}
 
-            # Save last checkpoint
+            # Save last, best and delete
             torch.save(chkpt, last)
-
-            # Save best checkpoint
             if (best_fitness == fi) and not final_epoch:
                 torch.save(chkpt, best)
-
-            # Save backup every 10 epochs (optional)
-            # if epoch > 0 and epoch % 10 == 0:
-            #     torch.save(chkpt, wdir + 'backup%g.pt' % epoch)
-
-            # Delete checkpoint
             del chkpt
 
         # end epoch ----------------------------------------------------------------------------------------------------
-
     # end training
+
     n = opt.name
     if len(n):
         n = '_' + n if not n.isnumeric() else n
@@ -378,7 +370,6 @@ def train():
     print('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
     dist.destroy_process_group() if torch.cuda.device_count() > 1 else None
     torch.cuda.empty_cache()
-
     return results
 
 
@@ -389,8 +380,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='cfg/yolov3-spp.cfg', help='*.cfg path')
     parser.add_argument('--data', type=str, default='data/coco2017.data', help='*.data path')
     parser.add_argument('--multi-scale', action='store_true', help='adjust (67%% - 150%%) img_size every 10 batches')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[320, 640],
-                        help='[min_train, max-train, test] img sizes')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[320, 640], help='[min_train, max-train, test]')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', action='store_true', help='resume training from last.pt')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')

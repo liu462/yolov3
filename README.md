@@ -37,7 +37,7 @@ Python 3.7 or later with all `pip install -U -r requirements.txt` packages inclu
 * [Google Colab Notebook](https://colab.research.google.com/github/ultralytics/yolov3/blob/master/tutorial.ipynb) with quick training, inference and testing examples
 * [GCP Quickstart](https://github.com/ultralytics/yolov3/wiki/GCP-Quickstart)
 * [Docker Quickstart Guide](https://github.com/ultralytics/yolov3/wiki/Docker-Quickstart) 
-* [A TensorRT Implementation of YOLOv3-SPP](https://github.com/wang-xinyu/tensorrtx/tree/master/yolov3-spp) 
+* [A TensorRT Implementation of YOLOv3 and YOLOv4](https://github.com/wang-xinyu/tensorrtx/tree/master/yolov3-spp) 
 
 # Training
 
@@ -58,15 +58,15 @@ Python 3.7 or later with all `pip install -U -r requirements.txt` packages inclu
 ## Speed
 
 https://cloud.google.com/deep-learning-vm/  
-**Machine type:** preemptible [n1-standard-16](https://cloud.google.com/compute/docs/machine-types) (16 vCPUs, 60 GB memory)   
+**Machine type:** preemptible [n1-standard-8](https://cloud.google.com/compute/docs/machine-types) (8 vCPUs, 30 GB memory)   
 **CPU platform:** Intel Skylake  
 **GPUs:** K80 ($0.14/hr), T4 ($0.11/hr), V100 ($0.74/hr) CUDA with [Nvidia Apex](https://github.com/NVIDIA/apex) FP16/32    
-**HDD:** 1 TB SSD
+**HDD:** 300 GB SSD
 **Dataset:** COCO train 2014 (117,263 images)  
 **Model:** `yolov3-spp.cfg`  
-**Command:**  `python3 train.py --img 416 --batch 32 --accum 2`
+**Command:**  `python3 train.py --data coco2017.data --img 416 --batch 32`
 
-GPU |n| `--batch --accum` | img/s | epoch<br>time | epoch<br>cost
+GPU | n | `--batch-size` | img/s | epoch<br>time | epoch<br>cost
 --- |--- |--- |--- |--- |---
 K80    |1| 32 x 2 | 11  | 175 min  | $0.41
 T4     |1<br>2| 32 x 2<br>64 x 1 | 41<br>61 | 48 min<br>32 min | $0.09<br>$0.11
@@ -155,11 +155,12 @@ Speed: 17.5/2.3/19.9 ms inference/NMS/total per 640x640 image at batch-size 16
 
 # Reproduce Our Results
 
-This command trains `yolov3-spp.cfg` from scratch to our mAP above. Training takes about one week on a 2080Ti.
+Run commands below. Training takes about one week on a 2080Ti per model.
 ```bash
-$ python3 train.py --weights '' --cfg yolov3-spp.cfg --epochs 300 --batch-size 16 --img 320 640
+$ python train.py --data coco2014.data --weights '' --batch-size 16 --cfg yolov3-spp.cfg
+$ python train.py --data coco2014.data --weights '' --batch-size 32 --cfg yolov3-tiny.cfg
 ```
-<img src="https://user-images.githubusercontent.com/26833433/77986559-408b7e80-72cc-11ea-9c4f-5d7820840a98.png" width="900">
+<img src="https://user-images.githubusercontent.com/26833433/80831822-57a9de80-8ba0-11ea-9684-c47afb0432dc.png" width="900">
 
 # Reproduce Our Environment
 

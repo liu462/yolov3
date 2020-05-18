@@ -61,7 +61,7 @@ https://cloud.google.com/deep-learning-vm/
 **Machine type:** preemptible [n1-standard-8](https://cloud.google.com/compute/docs/machine-types) (8 vCPUs, 30 GB memory)   
 **CPU platform:** Intel Skylake  
 **GPUs:** K80 ($0.14/hr), T4 ($0.11/hr), V100 ($0.74/hr) CUDA with [Nvidia Apex](https://github.com/NVIDIA/apex) FP16/32    
-**HDD:** 300 GB SSD
+**HDD:** 300 GB SSD  
 **Dataset:** COCO train 2014 (117,263 images)  
 **Model:** `yolov3-spp.cfg`  
 **Command:**  `python3 train.py --data coco2017.data --img 416 --batch 32`
@@ -107,11 +107,11 @@ $ git clone https://github.com/ultralytics/yolov3 && cd yolov3
 
 # convert darknet cfg/weights to pytorch model
 $ python3  -c "from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolov3-spp.weights')"
-Success: converted 'weights/yolov3-spp.weights' to 'converted.pt'
+Success: converted 'weights/yolov3-spp.weights' to 'weights/yolov3-spp.pt'
 
 # convert cfg/pytorch model to darknet weights
 $ python3  -c "from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolov3-spp.pt')"
-Success: converted 'weights/yolov3-spp.pt' to 'converted.weights'
+Success: converted 'weights/yolov3-spp.pt' to 'weights/yolov3-spp.weights'
 ```
 
 # mAP
